@@ -1,10 +1,16 @@
 #include <stdio.h>
 #include <iostream>
 #include "command.h"
+#include <signal.h>
+#include <sys/wait.h>
+
+
 
 static inline void init_shell()
 {
     setenv("PATH", "bin:.", 1);
+    signal(SIGCHLD, sig_handler);
+
 }
 
 int main()
@@ -30,10 +36,10 @@ int main()
             }
         */
         vector<vector<string>> str_lines = cmd_split_line(tokens);
-        vector<s_cmdline> cmdlines;
+        vector<cmdline_t> cmdlines;
         for (auto str_line : str_lines)
         {
-            s_cmdline cmdline;
+            cmdline_t cmdline;
 
             cmd_parse(cmdline, str_line);
             cmdline.line_idx = line_idx++;

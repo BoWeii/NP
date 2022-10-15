@@ -1,5 +1,5 @@
-#ifndef _SHELL_HPP
-#define _SHELL_HPP
+#ifndef _SHELL_H
+#define _SHELL_H
 using namespace std;
 
 #endif
