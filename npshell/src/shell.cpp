@@ -10,6 +10,8 @@ static inline void init_shell()
 {
     setenv("PATH", "bin:.", 1);
     signal(SIGCHLD, sig_handler);
+    sigemptyset(&_sigset2);
+    sigaddset(&_sigset2, SIGCHLD);
 
 }
 
