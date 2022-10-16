@@ -20,7 +20,8 @@ ta:
 	$(CXX) commands/noop.cpp -o bin/noop
 	$(CXX) commands/number.cpp -o bin/number
 	$(CXX) commands/removetag.cpp -o bin/removetag
-	$(CXX) commands/removetag.cpp -o bin/removetag0
+	$(CXX) commands/removetag0.cpp -o bin/removetag0
+	$(CXX) commands/manyblessings.cpp -o bin/manyblessings
 
 
 test: clean all

@@ -75,11 +75,11 @@ static bool is_built_in_cmd(vector<string> &cmds)
     else if (!cmds[0].compare("printenv"))
     {
         string var = cmds[1];
-        string value = getenv(var.c_str());
+        char *value = getenv(var.c_str());
 
-        if (value.size())
+        if (value)
         {
-            cout << value << endl;
+            printf("%s\n", value);
         }
 
         return true;
@@ -92,25 +92,8 @@ static bool is_built_in_cmd(vector<string> &cmds)
     return false;
 }
 
-// static void print_cur_cmds(vector<cmd_t> &cmds)
-// {
-//     // using for debugging
-//     for (auto cmd : cmds)
-//     {
-//         printf("cmd = %s, symbol_type = %c, pipe_num = %d, file_name = %s ,argv = ", cmd.name.c_str(), special_symbols_icons[cmd.symbol_type], cmd.pipe_num, cmd.file_name.c_str());
-//         for (auto _argv : cmd.argv)
-//         {
-//             printf("%s ", _argv.c_str());
-//         }
-//         cout << endl;
-//     }
-// }
-
 void sig_handler(int signum)
 {
-    sigset_t oldset;
-    sigprocmask(SIG_BLOCK, &_sigset2, &oldset);
-
     pid_t pid;
     if (!use_sh_wait)
     {
@@ -119,39 +102,28 @@ void sig_handler(int signum)
     pid = wait(NULL);
     if (cur_process.find(pid) != cur_process.end())
     {
-        printf("[sig_handler] In sh cur process\n");
         cur_process.erase(pid);
     }
-    sigprocmask(SIG_SETMASK, &oldset, NULL);
 }
 
 // disable signal handler
 static void disable_sh()
 {
-    sigset_t oldset;
-    sigprocmask(SIG_BLOCK, &_sigset2, &oldset);
-
     use_sh_wait = false;
-
-    sigprocmask(SIG_SETMASK, &oldset, NULL);
 }
 
 // enable signal handler
 static void enable_sh()
 {
-    sigset_t oldset;
-    sigprocmask(SIG_BLOCK, &_sigset2, &oldset);
-
     use_sh_wait = true;
-
-    sigprocmask(SIG_SETMASK, &oldset, NULL);
 }
 
 static void cur_proc_insert(pid_t pid, int pipe_num)
 {
-    disable_sh();
+    sigset_t oldset;
+    sigprocmask(SIG_BLOCK, &_sigset2, &oldset);
     cur_process.insert(pair<pid_t, int>(pid, pipe_num));
-    enable_sh();
+    sigprocmask(SIG_SETMASK, &oldset, NULL);
 }
 
 static void remain_fd_remove(fd_t target)
@@ -224,24 +196,14 @@ vector<vector<string>> cmd_split_line(vector<string> tokens)
         }
         ret.push_back(line);
     }
-    // printf("[split to]\n");
-    // for (auto a : ret)
-    // {
-    //     for (auto b : a)
-    //     {
-    //         printf("%s ", b.c_str());
-    //     }
-    //     cout << endl;
-    // }
-    // cout << endl;
     return ret;
 }
 
-void cmd_parse(cmdline_t &cmdline, vector<string> line)
+bool cmd_parse(cmdline_t &cmdline, vector<string> line)
 {
     if (is_built_in_cmd(line))
     {
-        return;
+        return false;
     }
 
     vector<cmd_t> cmds;
@@ -274,7 +236,7 @@ void cmd_parse(cmdline_t &cmdline, vector<string> line)
         delete new_cmd;
     }
     cmdline.cmds = cmds;
-    return;
+    return true;
 }
 
 void cmd_exec(cmdline_t cmdline)
@@ -345,8 +307,11 @@ void cmd_exec(cmdline_t cmdline)
         if ((pid = fork()) > 0)
         {
             // parent process
-            
-            cur_proc_insert(pid, cmd->pipe_num);
+
+            if (!(cmd->symbol_type == pipe_numbered_out || cmd->symbol_type == pipe_numbered_out_err))
+            {
+                cur_proc_insert(pid, cmd->pipe_num);
+            }
 
             // input pipe
             if (read_pipe != -1)
@@ -414,9 +379,9 @@ void cmd_exec(cmdline_t cmdline)
 
             argv = (char **)malloc(sizeof(char *) * argv_size);
             argv[0] = &(cmd->name[0]);
-            for (auto _argv : cmd->argv)
+            for (size_t i = 0; i < cmd->argv.size(); i++)
             {
-                argv[argv_idx++] = &(_argv[0]);
+                argv[argv_idx++] = &(cmd->argv[i][0]);
             }
             argv[argv_idx] = NULL;
 
@@ -431,7 +396,6 @@ void cmd_exec(cmdline_t cmdline)
             // fork error
             // can not fork more process (number limited)
             disable_sh();
-            printf("fork error\n");
 
             pid_t pid2 = wait(NULL);
             cur_process.erase(pid2);

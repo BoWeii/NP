@@ -4,15 +4,12 @@
 #include <signal.h>
 #include <sys/wait.h>
 
-
-
 static inline void init_shell()
 {
     setenv("PATH", "bin:.", 1);
     signal(SIGCHLD, sig_handler);
     sigemptyset(&_sigset2);
     sigaddset(&_sigset2, SIGCHLD);
-
 }
 
 int main()
@@ -43,10 +40,12 @@ int main()
         {
             cmdline_t cmdline;
 
-            cmd_parse(cmdline, str_line);
-            cmdline.line_idx = line_idx++;
-
-            cmdlines.push_back(cmdline);
+            if (cmd_parse(cmdline, str_line))
+            {
+                // not built_in cmd
+                cmdline.line_idx = line_idx++;
+                cmdlines.push_back(cmdline);
+            }
         }
         for (auto cmdline : cmdlines)
         {
