@@ -9,7 +9,7 @@
 #include <unordered_set>
 #include <fcntl.h>
 
-// store the process should not finish in cur_process, like pipe_numbered;
+// store the fd in use
 vector<fd_t> remain_fd;
 
 // <which_pid, pipe to which number>
@@ -61,20 +61,20 @@ static vector<string> tokenize(string line)
     return ret;
 }
 
-static bool is_built_in_cmd(vector<string> &cmds)
+static bool is_built_in_cmd(vector<cmd_t> &cmds)
 {
-    if (!cmds[0].compare("setenv"))
+    if (!cmds[0].name.compare("setenv"))
     {
-        string var = cmds[1];
-        string value = cmds[2];
+        string var = cmds[0].argv[0];
+        string value = cmds[0].argv[1];
 
         setenv(var.c_str(), value.c_str(), 1);
 
         return true;
     }
-    else if (!cmds[0].compare("printenv"))
+    else if (!cmds[0].name.compare("printenv"))
     {
-        string var = cmds[1];
+        string var = cmds[0].argv[0];
         char *value = getenv(var.c_str());
 
         if (value)
@@ -84,7 +84,7 @@ static bool is_built_in_cmd(vector<string> &cmds)
 
         return true;
     }
-    else if (!cmds[0].compare("exit"))
+    else if (!cmds[0].name.compare("exit"))
     {
         exit(0);
     }
@@ -199,13 +199,8 @@ vector<vector<string>> cmd_split_line(vector<string> tokens)
     return ret;
 }
 
-bool cmd_parse(cmdline_t &cmdline, vector<string> line)
+void cmd_parse(cmdline_t &cmdline, vector<string> line)
 {
-    if (is_built_in_cmd(line))
-    {
-        return false;
-    }
-
     vector<cmd_t> cmds;
     bool is_ready_counter_cmd = true;
     size_t cur_idx = 0;
@@ -236,11 +231,15 @@ bool cmd_parse(cmdline_t &cmdline, vector<string> line)
         delete new_cmd;
     }
     cmdline.cmds = cmds;
-    return true;
+    return;
 }
 
 void cmd_exec(cmdline_t cmdline)
 {
+    if (is_built_in_cmd(cmdline.cmds))
+    {
+        return;
+    }
 
     pid_t pid;
     int cmd_idx = 0;

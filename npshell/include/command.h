@@ -35,7 +35,7 @@ typedef struct fd_t
 
 
 vector<string> cmd_read();
-bool cmd_parse(cmdline_t &cmdline, vector<string> line);
+void cmd_parse(cmdline_t &cmdline, vector<string> line);
 void cmd_exec(cmdline_t cmdline);
 
 vector<vector<string>> cmd_split_line(vector<string> tokens);

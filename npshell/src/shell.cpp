@@ -40,12 +40,9 @@ int main()
         {
             cmdline_t cmdline;
 
-            if (cmd_parse(cmdline, str_line))
-            {
-                // not built_in cmd
-                cmdline.line_idx = line_idx++;
-                cmdlines.push_back(cmdline);
-            }
+            cmd_parse(cmdline, str_line);
+            cmdline.line_idx = line_idx++;
+            cmdlines.push_back(cmdline);
         }
         for (auto cmdline : cmdlines)
         {
