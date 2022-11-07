@@ -2,24 +2,25 @@ CXX:=g++
 CFLAG =  -Wall
 
 SIMPLE:=np_simple
-SIMPLE_IC:=$(SIMPLE)_dir/include
-SIMPLE_SRC:=$(shell find np_simple_dir/src/ -name '*.cpp')
+SIMPLE_IC:=$(SIMPLE)_/include
+SIMPLE_SRC:=$(shell find np_simple_/src/ -name '*.cpp')
 SIMPLE_OBJS:=$(SIMPLE_SRC:%.cpp=%.o) 
 
-# SINGLE:=np_single_proc
-# SINGLE_IC:=$(SINGLE)_dir/include
-# SINGLE_SRC:=$(shell find np_single_proc_dir/src/ -name '*.cpp')
-# SINGLE_OBJS:=$(SINGLE_SRC:%.cpp=%.o) 
+SINGLE:=np_single_proc
+SINGLE_IC:=$(SINGLE)_/include
+SINGLE_SRC:=$(shell find np_single_proc_/src/ -name '*.cpp')
+SINGLE_OBJS:=$(SINGLE_SRC:%.cpp=%.o) 
 
-all: $(SIMPLE)
+all: $(SINGLE)
 
 $(SIMPLE):
 	$(CXX) -o $@ -I$(SIMPLE_IC) $(CFLAG) $(SIMPLE_SRC)
 
-# $(SINGLE):
-# 	$(CXX) -o $@ -I$(SINGLE_IC) $(CFLAG) $(SINGLE_SRC)
+$(SINGLE):
+	$(CXX) -o $@ -I$(SINGLE_IC) $(CFLAG) $(SINGLE_SRC)
 
-
+test : clean all
+	./np_single_proc 7001
 	
 
 ta: 
@@ -31,4 +32,4 @@ ta:
 
 
 clean:
-	$(RM) $(SIMPLE) $(SIMPLE_OBJS)
+	$(RM) $(SINGLE) $(SINGLE_OBJS)

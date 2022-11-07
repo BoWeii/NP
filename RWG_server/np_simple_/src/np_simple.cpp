@@ -11,7 +11,6 @@ using namespace std;
 
 #define MAX_ONLINE_USER 30
 
-
 int main(int argc, char *argv[])
 {
     if (argc != 2)
@@ -20,7 +19,6 @@ int main(int argc, char *argv[])
         exit(-1);
     }
     int port = atoi(argv[1]);
-
 
     int server_sock;
     struct sockaddr_in sock_addr;
@@ -33,9 +31,15 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
+    if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
+    {
+        cerr << "[error] fail to setsockopt\n";
+        exit(-1);
+    }
+
     bzero(&sock_addr, sizeof(sock_addr)); // init the struct's bit to all zero
     sock_addr.sin_family = AF_INET;       // ipv4
-    sock_addr.sin_port = htons(port);     // transfer local's endian to network's endian
+    sock_addr.sin_port = htons(port);     // transfer host's endian to network's endian
     sock_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_sock, (struct sockaddr *)&sock_addr, sizeof(sock_addr)) < 0)
@@ -71,8 +75,8 @@ int main(int argc, char *argv[])
         else
         {
             // child process
-            close(server_sock);
             
+            close(server_sock);
             shell_run(client_sock);
         }
     }
