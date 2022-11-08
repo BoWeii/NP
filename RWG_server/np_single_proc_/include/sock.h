@@ -1,5 +1,5 @@
-#ifndef __SOCK_H
-#define __SOCK_H
+#ifndef __FD_T_H
+#define __FD_T_H
 
 #include <iostream>
 #include <unistd.h>

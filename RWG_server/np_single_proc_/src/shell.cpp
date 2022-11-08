@@ -37,7 +37,8 @@ int shell_run_single_command(user_t user)
         cmdline_t cmdline;
 
         cmd_parse(cmdline, str_line);
-        cmdline.line_idx = user.line_idx++;
+
+        cmdline.line_idx = usr_line_idx_plus(user.id, 1);
         cmdlines.push_back(cmdline);
     }
     if (!cmdlines[0].cmds[0].name.compare("exit"))
@@ -46,7 +47,7 @@ int shell_run_single_command(user_t user)
     }
     for (auto cmdline : cmdlines)
     {
-        cmd_exec(cmdline, user.sock_fd);
+        cmd_exec(cmdline, user);
     }
 
     msg_prompt(user.sock_fd);

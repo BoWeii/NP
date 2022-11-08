@@ -2,6 +2,7 @@
 #define _COMMAND_H
 #include <vector>
 #include <string>
+#include "user.h"
 using namespace std;
 
 typedef enum
@@ -26,16 +27,10 @@ typedef struct cmdline_t
     vector<cmd_t> cmds;
 } cmdline_t;
 
-typedef struct fd_t
-{
-    int target_line;
-    pid_t pid;
-    int pipe_fd[2];
-} fd_t;
 
 vector<string> cmd_read(int client_sock);
 void cmd_parse(cmdline_t &cmdline, vector<string> line);
-void cmd_exec(cmdline_t cmdline, int client_sock);
+void cmd_exec(cmdline_t cmdline, user_t user);
 
 vector<vector<string>> cmd_split_line(vector<string> tokens);
 void sig_handler(int signum);

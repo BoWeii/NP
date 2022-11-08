@@ -10,8 +10,13 @@
 #include <unordered_set>
 #include <fcntl.h>
 #include "sock.h"
+#include "user.h"
+#include "message.h"
+#include "fd.h"
+using namespace std;
+
 // store the fd in use
-vector<fd_t> remain_fd;
+// vector<fd_t> remain_fd;
 
 // <which_pid, pipe to which number>
 unordered_map<pid_t, int> cur_process;
@@ -60,36 +65,109 @@ static vector<string> tokenize(string line)
         ret.push_back(token);
     }
 
+    /*
+        tell and yell should parse like the below pattern
+        -> tell 3 "hello    world"
+        -> yell  "hello  world"
+    */
+    if (ret.size() && !ret[0].compare("tell"))
+    {
+        string cmd = ret[0];
+        string who = ret[1];
+        ret.clear();
+        ret.push_back(cmd);
+        ret.push_back(who);
+
+        // find string after who's position
+        size_t str_idx_start = line.find(ret[2], line.find(who) + who.size());
+        string msg = line.substr(str_idx_start);
+        ret.push_back(msg);
+    }
+    else if (ret.size() && !ret[0].compare("yell"))
+    {
+        string cmd = ret[0];
+        ret.clear();
+        ret.push_back(cmd);
+
+        // find string after cmd's position
+        size_t str_idx_start = line.find(ret[1], cmd.size());
+        string msg = line.substr(str_idx_start);
+        ret.push_back(msg);
+    }
+
     return ret;
 }
 
-static bool is_built_in_cmd(vector<cmd_t> &cmds, int client_sock)
+static bool is_built_in_cmd(vector<cmd_t> &cmds, user_t user)
 {
     if (!cmds[0].name.compare("setenv"))
     {
         string var = cmds[0].argv[0];
         string value = cmds[0].argv[1];
-
-        setenv(var.c_str(), value.c_str(), 1);
+        usr_set_env_var(user.id, var, value);
 
         return true;
     }
     else if (!cmds[0].name.compare("printenv"))
     {
         string var = cmds[0].argv[0];
-        char *value = getenv(var.c_str());
-
-        if (value)
-        {
-            sock_write(client_sock, value, strlen(value));
-            sock_write(client_sock, "\n", 1);
-        }
+        usr_print_env_var(user, var);
 
         return true;
     }
-    else if (!cmds[0].name.compare("exit"))
+    else if (!cmds[0].name.compare("who"))
     {
-        exit(0);
+        msg_who(user);
+        return true;
+    }
+    else if (!cmds[0].name.compare("tell"))
+    {
+        char msg[MSG_SIZE_MAX] = {0};
+        string who_str = cmds[0].argv[0];
+        int who = atoi(&who_str[0]);
+        string msg_str = cmds[0].argv[1];
+        user_t target = usr_find_by_id(who);
+
+        if (target.id != -1)
+        {
+            sprintf(msg, "*** %s told you ***: %s\n", user.name.c_str(), msg_str.c_str());
+            msg_tell(target.sock_fd, msg);
+        }
+        else
+        {
+            sprintf(msg, "*** Error: user #%d does not exist yet. ***\n", who);
+            msg_tell(user.sock_fd, msg);
+        }
+        return true;
+    }
+    else if (!cmds[0].name.compare("yell"))
+    {
+        char msg[MSG_SIZE_MAX] = {0};
+        string msg_str = cmds[0].argv[0];
+
+        sprintf(msg, "*** %s yelled ***: %s\n", user.name.c_str(), msg_str.c_str());
+        msg_broadcast(string(msg));
+        return true;
+    }
+    else if (!cmds[0].name.compare("name"))
+    {
+        char msg[MSG_SIZE_MAX] = {0};
+        string new_name = cmds[0].argv[0];
+
+        user_t duplicate_user = usr_find_by_name(new_name);
+        if (duplicate_user.id == -1)
+        {
+            usr_update_name(user.id, new_name);
+            sprintf(msg, "*** User from %s:%d is named '%s'. ***\n", user.ip.c_str(), user.port, new_name.c_str());
+            msg_broadcast(msg);
+        }
+        else
+        {
+            sprintf(msg, "*** User '%s' already exists. ***\n", new_name.c_str());
+            msg_tell(user.sock_fd, msg);
+        }
+
+        return true;
     }
 
     return false;
@@ -127,36 +205,6 @@ static void cur_proc_insert(pid_t pid, int pipe_num)
     sigprocmask(SIG_BLOCK, &_sigset, &oldset);
     cur_process.insert(pair<pid_t, int>(pid, pipe_num));
     sigprocmask(SIG_SETMASK, &oldset, NULL);
-}
-
-static void remain_fd_remove(fd_t target)
-{
-    for (auto fd = remain_fd.begin(); fd != remain_fd.end(); fd++)
-    {
-        if (target.target_line == fd->target_line)
-        {
-            remain_fd.erase(fd);
-            return;
-        }
-    }
-}
-
-fd_t get_fd_by_line_idx(int line_idx)
-{
-    fd_t ret;
-    // check exist or not;
-    ret.target_line = -1;
-
-    for (auto fd : remain_fd)
-    {
-        if (line_idx == fd.target_line)
-        {
-            ret.pipe_fd[0] = fd.pipe_fd[0];
-            ret.pipe_fd[1] = fd.pipe_fd[1];
-            ret.target_line = fd.target_line;
-        }
-    }
-    return ret;
 }
 
 static void wait_cur_proc()
@@ -235,9 +283,23 @@ void cmd_parse(cmdline_t &cmdline, vector<string> line)
     return;
 }
 
-void cmd_exec(cmdline_t cmdline, int client_sock)
+// static void print_cur_cmds(vector<cmd_t> &cmds)
+// {
+//     // using for debugging
+//     for (auto cmd : cmds)
+//     {
+//         printf("cmd = %s, symbol_type = %c, pipe_num = %d, file_name = %s ,argv = ", cmd.name.c_str(), special_symbols_icons[cmd.symbol_type], cmd.pipe_num, cmd.file_name.c_str());
+//         for (auto _argv : cmd.argv)
+//         {
+//             printf("%s ", _argv.c_str());
+//         }
+//         cout << endl;
+//     }
+// }
+
+void cmd_exec(cmdline_t cmdline, user_t user)
 {
-    if (is_built_in_cmd(cmdline.cmds, client_sock))
+    if (is_built_in_cmd(cmdline.cmds, user))
     {
         return;
     }
@@ -247,7 +309,7 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
     int read_pipe = -1;
     fd_t target;
 
-    fd_t pre_pipe = get_fd_by_line_idx(cmdline.line_idx);
+    fd_t pre_pipe = fd_find_by_line_idx(user, cmdline.line_idx);
     cur_process.clear();
 
     enable_sh();
@@ -275,14 +337,14 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
                 printf("Error : pipe after cmd_exec\n");
             }
 
-            target = get_fd_by_line_idx(cmdline.line_idx + cmd->pipe_num);
+            target = fd_find_by_line_idx(user, cmdline.line_idx + cmd->pipe_num);
             if (target.target_line == -1)
             {
                 fd_t fd;
                 fd.pipe_fd[0] = out_pipe[0];
                 fd.pipe_fd[1] = out_pipe[1];
                 fd.target_line = cmdline.line_idx + cmd->pipe_num;
-                remain_fd.push_back(fd);
+                fd_add(user, fd);
             }
             else
             {
@@ -297,7 +359,7 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
         }
 
         // If the cmd is ready to receive number_pipe, close the write_pipe of both shell&cmd
-        fd_t target = get_fd_by_line_idx(cmdline.line_idx);
+        fd_t target = fd_find_by_line_idx(user, cmdline.line_idx);
         if (target.target_line != -1)
         {
             close(target.pipe_fd[1]);
@@ -341,13 +403,13 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
             // child process
 
             // input pipe
-            dup2(client_sock, STDIN_FILENO);
+            dup2(user.sock_fd, STDIN_FILENO);
 
             // check first cmd has been pipe_numbered or not
             if (pre_pipe.target_line != -1 && cmd_idx == 0)
             {
                 dup2(pre_pipe.pipe_fd[0], STDIN_FILENO);
-                remain_fd_remove(pre_pipe);
+                fd_remove(user, pre_pipe);
             }
             else if (read_pipe != -1)
             {
@@ -355,8 +417,8 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
             }
 
             // output pipe
-            dup2(client_sock, STDOUT_FILENO);
-            dup2(client_sock, STDERR_FILENO);
+            dup2(user.sock_fd, STDOUT_FILENO);
+            dup2(user.sock_fd, STDERR_FILENO);
 
             switch (cmd->symbol_type)
             {
@@ -389,6 +451,11 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
                 argv[argv_idx++] = &(cmd->argv[i][0]);
             }
             argv[argv_idx] = NULL;
+
+            for (auto env : user.env_vars)
+            {
+                setenv(env.first.c_str(), env.second.c_str(), 1);
+            }
 
             execvp(argv[0], argv);
 

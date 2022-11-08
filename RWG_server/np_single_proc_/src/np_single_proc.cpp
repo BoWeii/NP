@@ -14,9 +14,6 @@
 using namespace std;
 
 #define MAX_ONLINE_USER 30
-#ifndef FD_COPY
-#define FD_COPY(dest, src) memcpy((dest), (src), sizeof *(dest))
-#endif
 
 int main(int argc, char *argv[])
 {
@@ -109,7 +106,7 @@ int main(int argc, char *argv[])
         {
             if (fd != server_sock && FD_ISSET(fd, &read_fds))
             {
-                user_t user = usr_find(fd);
+                user_t user = usr_find_by_sockfd(fd);
                 if (user.id == -1)
                 {
                     cerr << "[error] fail to find user_fd:" << fd << endl;
