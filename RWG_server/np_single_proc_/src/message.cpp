@@ -8,7 +8,6 @@
 
 using namespace std;
 
-
 void msg_broadcast(string msg)
 {
     for (auto user : users)
@@ -64,4 +63,39 @@ void msg_who(user_t me)
 
         msg_tell(me.sock_fd, "\n");
     }
+}
+
+void msg_up_not_exist(user_t from, user_t to)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", from.id, to.id);
+    msg_tell(to.sock_fd, string(msg));
+}
+
+void msg_user_not_exist(int id, user_t to)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** Error: user #%d does not exist yet. ***\n", id);
+    msg_tell(to.sock_fd, string(msg));
+}
+
+void msg_up_exist(user_t from, user_t to)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** Error: the pipe #%d->#%d already exists. ***\n", from.id, to.id);
+    msg_tell(from.sock_fd, string(msg));
+}
+
+void msg_broadcast_recv_up(user_t from, user_t to, string cmdline)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** %s (#%d) just received from %s (#%d) by '%s' ***\n", to.name.c_str(), to.id, from.name.c_str(), from.id, cmdline.c_str());
+    msg_broadcast(string(msg));
+}
+
+void msg_broadcast_recv_send(user_t from, user_t to, string cmdline)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** %s (#%d) just piped '%s' to %s (#%d) ***\n", from.name.c_str(), from.id, cmdline.c_str(), to.name.c_str(), to.id);
+    msg_broadcast(string(msg));
 }

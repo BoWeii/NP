@@ -13,6 +13,7 @@ using namespace std;
 
 #define DEFAULT_NAME "(no name)"
 
+// use vector is not a good...
 vector<user_t> users;
 
 static int get_unuse_id()
@@ -90,6 +91,7 @@ user_t usr_find_by_id(int id)
         if (user.id == id)
         {
             ret = user;
+            return ret;
         }
     }
     return ret;

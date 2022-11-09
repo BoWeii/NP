@@ -21,7 +21,11 @@ typedef struct user_
     unordered_map<string, string> env_vars;
 
     // store the fd in use
-    vector<fd_t> remain_fd;
+    vector<np_fd_t> remain_fd;
+
+    // store the user pipe to 
+    // key=uid
+    unordered_map<int,up_fd_t> up_fd;
 } user_t;
 
 user_t usr_add(int client_sock, struct sockaddr_in client_addr);

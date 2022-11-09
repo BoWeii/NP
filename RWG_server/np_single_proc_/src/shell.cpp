@@ -22,7 +22,6 @@ int shell_run_single_command(user_t user)
         msg_prompt(user.sock_fd);
         return 0;
     }
-
     /*
         str_lines={
             { ls, -al, |, cat, |2 },
@@ -30,6 +29,9 @@ int shell_run_single_command(user_t user)
             { ls, >, text.txt }
         }
     */
+    string raw_cmdline = tokens.back();
+    tokens.pop_back();
+
     vector<vector<string>> str_lines = cmd_split_line(tokens);
     vector<cmdline_t> cmdlines;
     for (auto str_line : str_lines)
@@ -37,7 +39,7 @@ int shell_run_single_command(user_t user)
         cmdline_t cmdline;
 
         cmd_parse(cmdline, str_line);
-
+        cmdline.raw = raw_cmdline;
         cmdline.line_idx = usr_line_idx_plus(user.id, 1);
         cmdlines.push_back(cmdline);
     }

@@ -4,7 +4,7 @@
 #include "fd.h"
 using namespace std;
 
-void fd_add(user_t user, fd_t new_fd)
+void remainfd_add(user_t user, np_fd_t new_fd)
 {
     for (auto _user = users.begin(); _user != users.end(); _user++)
     {
@@ -15,7 +15,7 @@ void fd_add(user_t user, fd_t new_fd)
     }
 }
 
-void fd_remove(user_t user, fd_t target)
+void remainfd_remove(user_t user, np_fd_t target)
 {
     for (auto _user = users.begin(); _user != users.end(); _user++)
     {
@@ -33,12 +33,12 @@ void fd_remove(user_t user, fd_t target)
     }
 }
 
-fd_t fd_find_by_line_idx(user_t user, int line_idx)
+np_fd_t remainfd_find_by_lineidx(user_t user, int line_idx)
 {
-    fd_t ret;
+    np_fd_t ret;
     // check exist or not;
     ret.target_line = -1;
-    for (auto _user =users.begin(); _user != users.end(); _user++)
+    for (auto _user = users.begin(); _user != users.end(); _user++)
     {
         if (_user->id == user.id)
         {
@@ -49,10 +49,61 @@ fd_t fd_find_by_line_idx(user_t user, int line_idx)
                     ret.pipe_fd[0] = fd.pipe_fd[0];
                     ret.pipe_fd[1] = fd.pipe_fd[1];
                     ret.target_line = fd.target_line;
+                    return ret;
                 }
             }
         }
     }
-
     return ret;
+}
+
+up_fd_t upfd_add(user_t target, int uid)
+{
+    up_fd_t ret;
+    for (auto user = users.begin(); user != users.end(); user++)
+    {
+        if (user->id == target.id)
+        {
+            up_fd_t up_fd;
+            up_fd.uid = uid;
+            pipe(up_fd.pipe_fd);
+
+            pair<int, up_fd_t> tmp(uid, up_fd);
+
+            user->up_fd.insert(tmp);
+            ret = up_fd;
+            break;
+        }
+    }
+    return ret;
+}
+
+up_fd_t upfd_find_by_uid(user_t target, int uid)
+{
+    up_fd_t ret;
+    ret.uid = -1;
+    for (auto user = users.begin(); user != users.end(); user++)
+    {
+        if (user->id == target.id)
+        {
+            auto fd = user->up_fd.find(uid);
+            if (fd != user->up_fd.end())
+            {
+                ret = fd->second;
+                return ret;
+            }
+        }
+    }
+    return ret;
+}
+
+void upfd_remove(int from_uid, int to_uid)
+{
+    for (auto user = users.begin(); user != users.end(); user++)
+    {
+        if (user->id == from_uid)
+        {
+            user->up_fd.erase(to_uid);
+        }
+    }
 }
