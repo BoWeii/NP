@@ -107,3 +107,11 @@ void upfd_remove(int from_uid, int to_uid)
         }
     }
 }
+
+void upfd_remove_from_all_user(int logut_id)
+{
+    for (auto user = users.begin(); user != users.end(); user++)
+    {
+        user->up_fd.erase(logut_id);
+    }
+}

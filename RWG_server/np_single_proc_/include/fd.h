@@ -30,4 +30,5 @@ void remainfd_add(user_t user, np_fd_t new_fd);
 up_fd_t upfd_find_by_uid(user_t user,int id);
 up_fd_t upfd_add(user_t target, int uid);
 void upfd_remove(int from_uid, int to_uid);
+void upfd_remove_from_all_user(int logut_id);
 #endif

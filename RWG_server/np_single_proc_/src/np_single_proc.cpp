@@ -116,6 +116,7 @@ int main(int argc, char *argv[])
                 {
                     // client call the exit
                     usr_remove(user.id);
+                    upfd_remove_from_all_user(user.id);
                     msg_broadcast_logout(user);
 
                     FD_CLR(fd, &all_fds);

@@ -89,25 +89,28 @@ static vector<string> tokenize(string line)
     {
         string cmd = ret[0];
         string who = ret[1];
-        ret.clear();
-        ret.push_back(cmd);
-        ret.push_back(who);
+        vector<string> ret2;
+        ret2.push_back(cmd);
+        ret2.push_back(who);
 
         // find string after who's position
         size_t str_idx_start = line.find(ret[2], line.find(who) + who.size());
         string msg = line.substr(str_idx_start);
-        ret.push_back(msg);
+        ret2.push_back(msg);
+        return ret2;
     }
     else if (ret.size() && !ret[0].compare("yell"))
     {
         string cmd = ret[0];
-        ret.clear();
-        ret.push_back(cmd);
+        vector<string> ret2;
+        ret2.push_back(cmd);
 
         // find string after cmd's position
+        dprintf(2, "ret.size=%ld\n", ret.size());
         size_t str_idx_start = line.find(ret[1], cmd.size());
         string msg = line.substr(str_idx_start);
-        ret.push_back(msg);
+        ret2.push_back(msg);
+        return ret2;
     }
 
     return ret;
@@ -434,7 +437,9 @@ void cmd_exec(cmdline_t cmdline, user_t user)
         {
             // parent process
 
-            if (!(IS_PIPE_NUMBER_OUT(cmd->symbol_type) || IS_PIPE_NUMBER_OUT_ERR(cmd->symbol_type)))
+            if (!(IS_PIPE_NUMBER_OUT(cmd->symbol_type) ||
+                  IS_PIPE_NUMBER_OUT_ERR(cmd->symbol_type) ||
+                  IS_PIPE_USER_OUT(cmd->symbol_type)))
             {
                 cur_proc_insert(pid, cmd->pipe_num);
             }
@@ -467,6 +472,13 @@ void cmd_exec(cmdline_t cmdline, user_t user)
             if (file_fd != -1)
             {
                 close(file_fd);
+            }
+
+            // remove the from_user's user_pipe to the user
+            if (from_up.uid > 0)
+            {
+                upfd_remove(first_cmd.from_uid, user.id);
+                from_up.uid = 0;
             }
         }
         else if (pid == 0)
@@ -581,12 +593,6 @@ void cmd_exec(cmdline_t cmdline, user_t user)
     disable_sh();
     wait_cur_proc();
     enable_sh();
-
-    // remove the from_user's user_pipe to the user
-    if (from_up.uid > 0)
-    {
-        upfd_remove(first_cmd.from_uid, user.id);
-    }
 
     // remove the number_pipe's fd which already recieved
     if (pre_pipe.target_line != -1)
