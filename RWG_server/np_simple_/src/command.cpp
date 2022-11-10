@@ -245,10 +245,16 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
     pid_t pid;
     int cmd_idx = 0;
     int read_pipe = -1;
-    fd_t target;
+    fd_t pre_pipe, target;
 
-    fd_t pre_pipe = get_fd_by_line_idx(cmdline.line_idx);
     cur_process.clear();
+
+    // If the first cmd is ready to receive number_pipe, close the write_pipe of both shell and first cmd
+    pre_pipe = get_fd_by_line_idx(cmdline.line_idx);
+    if (pre_pipe.target_line != -1)
+    {
+        close(pre_pipe.pipe_fd[1]);
+    }
 
     enable_sh();
     for (auto cmd = cmdline.cmds.begin(); cmd != cmdline.cmds.end(); cmd++, cmd_idx++)
@@ -296,13 +302,6 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
             break;
         }
 
-        // If the cmd is ready to receive number_pipe, close the write_pipe of both shell&cmd
-        fd_t target = get_fd_by_line_idx(cmdline.line_idx);
-        if (target.target_line != -1)
-        {
-            close(target.pipe_fd[1]);
-        }
-
         // ready to fork
         if ((pid = fork()) > 0)
         {
@@ -347,7 +346,6 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
             if (pre_pipe.target_line != -1 && cmd_idx == 0)
             {
                 dup2(pre_pipe.pipe_fd[0], STDIN_FILENO);
-                remain_fd_remove(pre_pipe);
             }
             else if (read_pipe != -1)
             {
@@ -416,6 +414,11 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
     disable_sh();
     wait_cur_proc();
     enable_sh();
-
+    
+    // remove the number_pipe's fd which already recieved
+    if (pre_pipe.target_line != -1)
+    {
+        remain_fd_remove(pre_pipe);
+    }
     return;
 }

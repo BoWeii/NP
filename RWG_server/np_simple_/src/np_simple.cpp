@@ -30,7 +30,7 @@ int main(int argc, char *argv[])
         cerr << "[error] fail to call socket\n";
         exit(-1);
     }
-
+    int enable=1;
     if (setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
     {
         cerr << "[error] fail to setsockopt\n";

@@ -316,13 +316,20 @@ void cmd_exec(cmdline_t cmdline, user_t user)
     pid_t pid;
     int cmd_idx = 0;
     int read_pipe = -1;
-    np_fd_t target;
-    np_fd_t pre_pipe = remainfd_find_by_lineidx(user, cmdline.line_idx);
+    np_fd_t target, pre_pipe;
+
     cur_process.clear();
 
-    // output to/input from several pipes will not happened
-    // The read user_pipe must occur at first cmd of cmdline
-    // The write user_pipe must occur at last cmd of cmdline
+    // If the cmd is ready to receive number_pipe, close the write_pipe of both shell&cmd
+    pre_pipe = remainfd_find_by_lineidx(user, cmdline.line_idx);
+    if (pre_pipe.target_line != -1)
+    {
+        close(pre_pipe.pipe_fd[1]);
+    }
+
+    // output to/input from several pipes will not happened,
+    // so the read user_pipe must occur at first cmd of cmdline
+    // and the write user_pipe must occur at last cmd of cmdline.
     up_fd_t from_up, to_up;
     from_up.uid = to_up.uid = 0;
 
@@ -422,13 +429,6 @@ void cmd_exec(cmdline_t cmdline, user_t user)
             }
         }
 
-        // If the cmd is ready to receive number_pipe, close the write_pipe of both shell&cmd
-        np_fd_t target = remainfd_find_by_lineidx(user, cmdline.line_idx);
-        if (target.target_line != -1)
-        {
-            close(target.pipe_fd[1]);
-        }
-
         // ready to fork
         if ((pid = fork()) > 0)
         {
@@ -480,7 +480,6 @@ void cmd_exec(cmdline_t cmdline, user_t user)
             {
                 // check whether first cmd has been pipe_numbered or not
                 dup2(pre_pipe.pipe_fd[0], STDIN_FILENO);
-                remainfd_remove(user, pre_pipe);
             }
             else if (from_up.uid != 0)
             {
@@ -586,8 +585,13 @@ void cmd_exec(cmdline_t cmdline, user_t user)
     // remove the from_user's user_pipe to the user
     if (from_up.uid > 0)
     {
-        upfd_remove(first_cmd.from_uid,user.id);
+        upfd_remove(first_cmd.from_uid, user.id);
     }
 
+    // remove the number_pipe's fd which already recieved
+    if (pre_pipe.target_line != -1)
+    {
+        remainfd_remove(user, pre_pipe);
+    }
     return;
 }
