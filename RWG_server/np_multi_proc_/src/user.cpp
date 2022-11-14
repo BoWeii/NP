@@ -453,3 +453,19 @@ int usr_pipe_from(int from_uid, string cmdline)
     usr_broadcast(msg, MSG_NONE);
     return up_fds[from_uid];
 }
+
+void usr_pipe_release(int from_uid)
+{
+    // unlink fifo
+    // fifoname: user_pipe/<to_uid>/<from_uid>
+    char fifo[32];
+
+    sprintf(fifo, "user_pipe/%d/%d", cur_uid, from_uid);
+
+    unlink(fifo);
+
+    if (up_fds[from_uid]) {
+        close(up_fds[from_uid]);
+        up_fds[from_uid] = 0;
+    }
+}

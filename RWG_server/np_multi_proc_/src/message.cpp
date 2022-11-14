@@ -127,6 +127,7 @@ void msg_write_msg(const char *content, int type, int arg)
         ptr->content[msg_len] = 0;
 
         *write_offset_ptr += msg_len + 1 + 1;
+        *write_offset_ptr %= (MSG_SIZE_MAX - 1);
     }
     else
     {
@@ -153,6 +154,8 @@ void msg_write_msg(const char *content, int type, int arg)
     }
 
     msg_write_signal();
+
+    free(msg);
 }
 
 void msg_read_msg()
@@ -161,9 +164,10 @@ void msg_read_msg()
 
     char *mem = shm_msg.msg->mem;
     int write_offset = shm_msg.msg->write_offset;
-    int read_offset = shm_msg.read_offset;
     int *read_offset_ptr = (int *)(&shm_msg.read_offset);
+    int read_offset = *read_offset_ptr;
     char *content;
+
     message_str_t *ptr;
     if ((unsigned char)mem[*read_offset_ptr] != MSG_CANT_EXCEED)
     {
@@ -175,8 +179,10 @@ void msg_read_msg()
         return;
     }
 
-    ptr = (message_str_t *)(&mem[*read_offset_ptr]);
+    // get msg_len
+    ptr = (message_str_t *)&(mem[*read_offset_ptr]);
     content = ptr->content;
+
     int msg_len = 0;
     while (*read_offset_ptr != write_offset)
     {
@@ -194,12 +200,13 @@ void msg_read_msg()
         content = &mem[*read_offset_ptr];
     }
 
+    // read message
     if (msg_len)
     {
         char *msg = (char *)malloc(sizeof(char) * (msg_len + 1));
         char delims[] = {MSG_STR_DELIM, 0};
 
-        ptr = (message_str_t *)(&mem[read_offset]);
+        ptr = (message_str_t *)&(mem[read_offset]);
         content = ptr->content;
 
         int idx = 0;
@@ -241,7 +248,7 @@ void msg_read_msg()
                 return;
             }
 
-            if ((char)sub_token[0] == MSG_CANT_EXCEED)
+            if ((unsigned char)sub_token[0] == MSG_CANT_EXCEED)
             {
                 sub_token += 1;
             }
@@ -266,7 +273,7 @@ void msg_read_msg()
                 // "MSG_LOGOUT <logout_uid> <content><MSG_STR_DELIM>"
                 sub_token = strtok_r(NULL, " ", &sub_token_end);
                 who = atoi(sub_token);
-                usr_remove(who);
+                usr_pipe_release(who);
 
                 sub_token = sub_token + strlen(sub_token) + 1;
                 msg_tell(cur_sock_fd, sub_token);
@@ -283,6 +290,7 @@ void msg_read_msg()
         free(msg);
         return;
     }
+    
     msg_read_signal();
     return;
 }

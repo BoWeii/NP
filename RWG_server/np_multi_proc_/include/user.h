@@ -55,5 +55,7 @@ void usr_builtin_tell(int id, string msg);
 void usr_pipe_open();
 int usr_pipe_to(int to_uid, string cmdline);
 int usr_pipe_from(int from_uid, string cmdline);
+void usr_pipe_release(int from_uid);
+
 extern shm_users_t shm_users;
 #endif

@@ -171,6 +171,7 @@ int main(int argc, char *argv[])
 
             shell_run(client_sock, uid);
 
+            signal(SIGUSR1, SIG_IGN);
             sprintf(msg, "*** User '%s' left. ***\n", shm_users.users[uid].name);
             usr_broadcast(msg, MSG_LOGOUT);
 
