@@ -9,24 +9,17 @@
 #include <cstring>
 #include <unordered_set>
 #include <fcntl.h>
-#include <algorithm>
-#include <string>
-
 #include "sock.h"
-#include "user.h"
-#include "message.h"
 #include "fd.h"
-using namespace std;
-
-// store the fd in use
-// vector<np_fd_t> remain_fd;
-
+#include "message.h"
+#include "user.h"
+#include "shell.h"
 // <which_pid, pipe to which number>
 unordered_map<pid_t, int> cur_process;
 
 sigset_t _sigset;
 bool use_sh_wait = true;
-const char special_symbols_icons[] = {'>', '|', 'x', '!', '<'};
+const char special_symbols_icons[] = {'>', '|', 'x', '!'};
 #define MAX_LINE_SIZE 15000
 
 #define handle_special_symbol(str, new_cmd)              \
@@ -115,75 +108,56 @@ static vector<string> tokenize(string line)
     return ret;
 }
 
-static bool is_built_in_cmd(vector<cmd_t> &cmds, user_t user)
+static bool is_built_in_cmd(vector<cmd_t> &cmds, int client_sock)
 {
     if (!cmds[0].name.compare("setenv"))
     {
         string var = cmds[0].argv[0];
         string value = cmds[0].argv[1];
-        usr_set_env_var(user.id, var, value);
+
+        setenv(var.c_str(), value.c_str(), 1);
 
         return true;
     }
     else if (!cmds[0].name.compare("printenv"))
     {
         string var = cmds[0].argv[0];
-        usr_print_env_var(user, var);
+        char *value = getenv(var.c_str());
+
+        if (value)
+        {
+            sock_write(client_sock, value, strlen(value));
+            sock_write(client_sock, "\n", 1);
+        }
 
         return true;
     }
     else if (!cmds[0].name.compare("who"))
     {
-        msg_who(user);
+        usr_who();
         return true;
     }
     else if (!cmds[0].name.compare("tell"))
     {
-        char msg[MSG_SIZE_MAX] = {0};
         string who_str = cmds[0].argv[0];
+        string msg = cmds[0].argv[1];
         int who = atoi(&who_str[0]);
-        string msg_str = cmds[0].argv[1];
-        user_t target = usr_find_by_id(who);
 
-        if (target.id != -1)
-        {
-            sprintf(msg, "*** %s told you ***: %s\n", user.name.c_str(), msg_str.c_str());
-            msg_tell(target.sock_fd, msg);
-        }
-        else
-        {
-            sprintf(msg, "*** Error: user #%d does not exist yet. ***\n", who);
-            msg_tell(user.sock_fd, msg);
-        }
+        usr_builtin_tell(who, msg);
         return true;
     }
     else if (!cmds[0].name.compare("yell"))
     {
-        char msg[MSG_SIZE_MAX] = {0};
-        string msg_str = cmds[0].argv[0];
+        string msg = cmds[0].argv[0];
 
-        sprintf(msg, "*** %s yelled ***: %s\n", user.name.c_str(), msg_str.c_str());
-        msg_broadcast(string(msg));
+        usr_yell(msg);
         return true;
     }
     else if (!cmds[0].name.compare("name"))
     {
-        char msg[MSG_SIZE_MAX] = {0};
         string new_name = cmds[0].argv[0];
-
-        user_t duplicate_user = usr_find_by_name(new_name);
-        if (duplicate_user.id == -1)
-        {
-            usr_update_name(user.id, new_name);
-            sprintf(msg, "*** User from %s:%d is named '%s'. ***\n", user.ip.c_str(), user.port, new_name.c_str());
-            msg_broadcast(msg);
-        }
-        else
-        {
-            sprintf(msg, "*** User '%s' already exists. ***\n", new_name.c_str());
-            msg_tell(user.sock_fd, msg);
-        }
-
+        
+        usr_update_name(new_name);
         return true;
     }
 
@@ -193,14 +167,26 @@ static bool is_built_in_cmd(vector<cmd_t> &cmds, user_t user)
 void sig_handler(int signum)
 {
     pid_t pid;
-    if (!use_sh_wait)
+    switch (signum)
     {
-        return;
-    }
-    pid = wait(NULL);
-    if (cur_process.find(pid) != cur_process.end())
-    {
-        cur_process.erase(pid);
+    case SIGCHLD:
+        if (!use_sh_wait)
+        {
+            return;
+        }
+        pid = wait(NULL);
+        if (cur_process.find(pid) != cur_process.end())
+        {
+            cur_process.erase(pid);
+        }
+        break;
+    case SIGUSR1:
+        msg_read_msg();
+    case SIGUSR2:
+        // usr_pipe_open();
+        break;
+    default:
+        break;
     }
 }
 
@@ -308,9 +294,9 @@ void cmd_parse(cmdline_t &cmdline, vector<string> line)
     return;
 }
 
-void cmd_exec(cmdline_t cmdline, user_t user)
+void cmd_exec(cmdline_t cmdline, int client_sock)
 {
-    if (is_built_in_cmd(cmdline.cmds, user))
+    if (is_built_in_cmd(cmdline.cmds, client_sock))
     {
         return;
     }
@@ -318,49 +304,15 @@ void cmd_exec(cmdline_t cmdline, user_t user)
     pid_t pid;
     int cmd_idx = 0;
     int read_pipe = -1;
-    np_fd_t target, pre_pipe;
+    np_fd_t pre_pipe, target;
 
     cur_process.clear();
 
-    // If the cmd is ready to receive number_pipe, close the write_pipe of both shell&cmd
-    pre_pipe = remainfd_find_by_lineidx(user, cmdline.line_idx);
+    // If the first cmd is ready to receive number_pipe, close the write_pipe of both shell and first cmd
+    pre_pipe = remainfd_find_by_lineidx(cmdline.line_idx);
     if (pre_pipe.target_line != -1)
     {
         close(pre_pipe.pipe_fd[1]);
-    }
-
-    // output to/input from several pipes will not happened,
-    // so the read user_pipe must occur at first cmd of cmdline
-    // and the write user_pipe must occur at last cmd of cmdline.
-    up_fd_t from_up, to_up;
-    from_up.uid = to_up.uid = 0;
-
-    // stdin from several pipe(num or user or ordinary) will not happened
-    cmd_t first_cmd = cmdline.cmds[0];
-    if (pre_pipe.target_line == -1 && IS_PIPE_USER_IN(first_cmd.symbol_type))
-    {
-        user_t from_user = usr_find_by_id(first_cmd.from_uid);
-        if (from_user.id != -1)
-        {
-            // check the from_user sent a pipe to the user or not?
-            from_up = upfd_find_by_uid(from_user, user.id);
-            if (from_up.uid != -1)
-            {
-                // receive the from_up and broadcast
-                msg_broadcast_recv_up(from_user, user, cmdline.raw);
-            }
-            else
-            {
-                // the from_user didn't pipe to the user
-                msg_up_not_exist(from_user, user);
-            }
-        }
-        else
-        {
-            // the user is not exist
-            msg_user_not_exist(first_cmd.from_uid, user);
-            from_up.uid = -1;
-        }
     }
 
     enable_sh();
@@ -387,14 +339,14 @@ void cmd_exec(cmdline_t cmdline, user_t user)
                 printf("Error : pipe after cmd_exec\n");
             }
 
-            target = remainfd_find_by_lineidx(user, cmdline.line_idx + cmd->pipe_num);
+            target = remainfd_find_by_lineidx(cmdline.line_idx + cmd->pipe_num);
             if (target.target_line == -1)
             {
                 np_fd_t fd;
                 fd.pipe_fd[0] = out_pipe[0];
                 fd.pipe_fd[1] = out_pipe[1];
                 fd.target_line = cmdline.line_idx + cmd->pipe_num;
-                remainfd_add(user, fd);
+                remainfd_add(fd);
             }
             else
             {
@@ -406,30 +358,6 @@ void cmd_exec(cmdline_t cmdline, user_t user)
         {
             file_fd = open(cmd->file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         }
-        else if (IS_PIPE_USER_OUT(cmd->symbol_type))
-        {
-            user_t to_user = usr_find_by_id(cmd->to_uid);
-            if (to_user.id != -1)
-            {
-                to_up = upfd_find_by_uid(user, cmd->to_uid);
-                if (to_up.uid == -1)
-                {
-                    to_up = upfd_add(user, cmd->to_uid);
-                    msg_broadcast_recv_send(user, to_user, cmdline.raw);
-                }
-                else
-                {
-                    // the user pipe exist and not receive yet
-                    msg_up_exist(user, to_user);
-                    to_up.uid = -1;
-                }
-            }
-            else
-            {
-                msg_user_not_exist(cmd->to_uid, user);
-                to_up.uid = -1;
-            }
-        }
 
         // ready to fork
         if ((pid = fork()) > 0)
@@ -437,8 +365,7 @@ void cmd_exec(cmdline_t cmdline, user_t user)
             // parent process
 
             if (!(IS_PIPE_NUMBER_OUT(cmd->symbol_type) ||
-                  IS_PIPE_NUMBER_OUT_ERR(cmd->symbol_type) ||
-                  IS_PIPE_USER_OUT(cmd->symbol_type)))
+                  IS_PIPE_NUMBER_OUT_ERR(cmd->symbol_type)))
             {
                 cur_proc_insert(pid, cmd->pipe_num);
             }
@@ -460,24 +387,10 @@ void cmd_exec(cmdline_t cmdline, user_t user)
                 read_pipe = -1;
             }
 
-            // close the shell's user pipe
-            if (to_up.uid > 0 && to_up.pipe_fd[1] != -1)
-            {
-                close(to_up.pipe_fd[1]);
-                to_up.pipe_fd[1] = -1;
-            }
-
             // redirect
             if (file_fd != -1)
             {
                 close(file_fd);
-            }
-
-            // remove the from_user's user_pipe to the user
-            if (from_up.uid > 0)
-            {
-                upfd_remove(first_cmd.from_uid, user.id);
-                from_up.uid = 0;
             }
         }
         else if (pid == 0)
@@ -485,25 +398,12 @@ void cmd_exec(cmdline_t cmdline, user_t user)
             // child process
 
             // input pipe
-            dup2(user.sock_fd, STDIN_FILENO);
+            dup2(client_sock, STDIN_FILENO);
 
+            // check first cmd has been pipe_numbered or not
             if (pre_pipe.target_line != -1 && cmd_idx == 0)
             {
-                // check whether first cmd has been pipe_numbered or not
                 dup2(pre_pipe.pipe_fd[0], STDIN_FILENO);
-            }
-            else if (from_up.uid != 0)
-            {
-                // check whether the first cmd wanna read user_pipe or not
-                if (from_up.uid == -1)
-                {
-                    int EOF_fd = open("/dev/null", O_RDONLY);
-                    dup2(EOF_fd, STDIN_FILENO);
-                }
-                else
-                {
-                    dup2(from_up.pipe_fd[0], STDIN_FILENO);
-                }
             }
             else if (read_pipe != -1)
             {
@@ -511,8 +411,8 @@ void cmd_exec(cmdline_t cmdline, user_t user)
             }
 
             // output pipe
-            dup2(user.sock_fd, STDOUT_FILENO);
-            dup2(user.sock_fd, STDERR_FILENO);
+            dup2(client_sock, STDOUT_FILENO);
+            dup2(client_sock, STDERR_FILENO);
 
             if (IS_PIPE_ORDINARY(cmd->symbol_type))
             {
@@ -534,20 +434,6 @@ void cmd_exec(cmdline_t cmdline, user_t user)
             {
                 dup2(file_fd, STDOUT_FILENO);
             }
-            if (to_up.uid != 0)
-            {
-                // check whether the last cmd wanna write user_pipe or not
-                if (to_up.uid == -1)
-                {
-                    int null_fd = open("/dev/null", O_WRONLY);
-                    dup2(null_fd, STDOUT_FILENO);
-                }
-                else
-                {
-                    close(to_up.pipe_fd[0]);
-                    dup2(to_up.pipe_fd[1], STDOUT_FILENO);
-                }
-            }
 
             // processing argv
             int argv_size = cmd->argv.size() + 2;
@@ -560,11 +446,6 @@ void cmd_exec(cmdline_t cmdline, user_t user)
                 argv[argv_idx++] = &(cmd->argv[i][0]);
             }
             argv[argv_idx] = NULL;
-
-            for (auto env : user.env_vars)
-            {
-                setenv(env.first.c_str(), env.second.c_str(), 1);
-            }
 
             execvp(argv[0], argv);
 
@@ -596,7 +477,7 @@ void cmd_exec(cmdline_t cmdline, user_t user)
     // remove the number_pipe's fd which already recieved
     if (pre_pipe.target_line != -1)
     {
-        remainfd_remove(user, pre_pipe);
+        remainfd_remove(pre_pipe);
     }
     return;
 }

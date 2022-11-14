@@ -1,5 +1,5 @@
 CXX:=g++
-CFLAG =  -Wall
+CFLAG =  -Wall -Wno-narrowing
 
 SIMPLE:=np_simple
 SIMPLE_IC:=$(SIMPLE)_/include
@@ -11,7 +11,12 @@ SINGLE_IC:=$(SINGLE)_/include
 SINGLE_SRC:=$(shell find np_single_proc_/src/ -name '*.cpp')
 SINGLE_OBJS:=$(SINGLE_SRC:%.cpp=%.o) 
 
-all: $(SINGLE)
+MULTI:=np_multi_proc
+MULTI_IC:=$(MULTI)_/include
+MULTI_SRC:=$(shell find np_multi_proc_/src/ -name '*.cpp')
+MULTI_OBJS:=$(MULTI_SRC:%.cpp=%.o) 
+
+all: $(MULTI)
 
 $(SIMPLE):
 	$(CXX) -o $@ -I$(SIMPLE_IC) $(CFLAG) $(SIMPLE_SRC)
@@ -19,8 +24,11 @@ $(SIMPLE):
 $(SINGLE):
 	$(CXX) -o $@ -I$(SINGLE_IC) $(CFLAG) $(SINGLE_SRC)
 
+$(MULTI):
+	$(CXX) -o $@ -I$(MULTI_IC) $(CFLAG) $(MULTI_SRC)
+
 test : clean all
-	./np_single_proc 7001
+	./np_multi_proc 7001
 	
 
 ta: 
@@ -32,4 +40,4 @@ ta:
 
 
 clean:
-	$(RM) $(SINGLE) $(SINGLE_OBJS)
+	$(RM) $(MULTI) $(MULTIOBJS)
