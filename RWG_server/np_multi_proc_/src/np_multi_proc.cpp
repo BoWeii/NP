@@ -66,8 +66,9 @@ static void init()
     signal(SIGINT, sigint_handler);
     signal(SIGCHLD, sigchld_handler);
 
-    // prevent the login broadcast to myself
+    // prevent the login msg broadcast to myself
     signal(SIGUSR1, SIG_IGN);
+
     users_init();
     msg_init();
 }
@@ -133,7 +134,6 @@ int main(int argc, char *argv[])
             // parent process
 
             client_shell.push_back(pid);
-
             close(client_sock);
         }
         else
@@ -150,10 +150,11 @@ int main(int argc, char *argv[])
             // if receive ctrl+c
             signal(SIGINT, sigint_child_hand);
 
-
             int uid = usr_add(client_addr);
+            cur_uid = uid;
+            cur_sock_fd = client_sock;
             msg_welcome(client_sock);
-            signal(SIGUSR1, sig_handler);
+
             // broadcast the new user login
             char msg[MSG_SIZE_MAX];
             sprintf(msg, "*** User '%s' entered from %s:%d. ***\n",
@@ -163,7 +164,8 @@ int main(int argc, char *argv[])
             usr_broadcast(msg, MSG_NONE);
             msg_tell(client_sock, string(msg));
 
-            // NEED? shm_msg.read_offset = shm_msg.msg->write_offset;
+            // the broadcast will move the write_offset, so fix the read_offset
+            shm_msg.read_offset = shm_msg.msg->write_offset;
 
             close(server_sock);
 

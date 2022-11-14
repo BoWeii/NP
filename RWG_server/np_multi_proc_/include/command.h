@@ -35,9 +35,9 @@ typedef struct cmdline_t
     string raw;
 } cmdline_t;
 
-vector<string> cmd_read(int client_sock);
+vector<string> cmd_read();
 void cmd_parse(cmdline_t &cmdline, vector<string> line);
-void cmd_exec(cmdline_t cmdline, int client_sock);
+void cmd_exec(cmdline_t cmdline);
 
 vector<vector<string>> cmd_split_line(vector<string> tokens);
 void sig_handler(int signum);

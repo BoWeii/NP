@@ -233,7 +233,6 @@ void msg_read_msg()
         while (token)
         {
             char *sub_token, *sub_token_end;
-            // dprintf(2, "uid=%d : token=%s\n", cur_uid, token);
             sub_token = strtok_r(token, " ", &sub_token_end);
 
             if (!sub_token)
@@ -248,8 +247,6 @@ void msg_read_msg()
             }
 
             int msg_type = atoi(sub_token);
-            // dprintf(2, "uid=%d : token=%s\n", cur_uid, token);
-            // dprintf(2, "uid=%d : msg_type=%d\n", cur_uid, msg_type);
             int who;
             switch (msg_type)
             {
@@ -288,4 +285,25 @@ void msg_read_msg()
     }
     msg_read_signal();
     return;
+}
+
+void msg_user_not_exist(int uid)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** Error: user #%d does not exist yet. ***\n", uid);
+    msg_tell(cur_sock_fd, string(msg));
+}
+
+void msg_up_exist(int to_uid)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** Error: the pipe #%d->#%d already exists. ***\n", cur_uid, to_uid);
+    msg_tell(cur_sock_fd, string(msg));
+}
+
+void msg_up_not_exist(int from_uid)
+{
+    char msg[MSG_SIZE_MAX];
+    sprintf(msg, "*** Error: the pipe #%d->#%d does not exist yet. ***\n", from_uid, cur_uid);
+    msg_tell(cur_sock_fd, string(msg));
 }

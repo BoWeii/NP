@@ -16,12 +16,13 @@ typedef struct user_
     int pid;
     int port;
 
-    // could not use string or char * because 
+    // could not use string or char * because
     // one process could not get another process's read-only section
     char name[32];
     char ip[16];
     bool registered;
     int sem_id;
+    int from_uid;
 
 } user_t;
 
@@ -44,7 +45,6 @@ void users_release();
 
 int usr_add(struct sockaddr_in client_addr);
 void usr_broadcast(char *msg, int type);
-void usr_pipe_open();
 void usr_remove(int uid);
 void usr_who();
 void usr_update_name(string name);
@@ -52,6 +52,8 @@ void usr_tell(int uid, const char *msg);
 void usr_yell(string msg_str);
 bool usr_find_by_name(string name);
 void usr_builtin_tell(int id, string msg);
-
+void usr_pipe_open();
+int usr_pipe_to(int to_uid, string cmdline);
+int usr_pipe_from(int from_uid, string cmdline);
 extern shm_users_t shm_users;
 #endif

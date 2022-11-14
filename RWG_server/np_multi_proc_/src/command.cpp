@@ -108,7 +108,7 @@ static vector<string> tokenize(string line)
     return ret;
 }
 
-static bool is_built_in_cmd(vector<cmd_t> &cmds, int client_sock)
+static bool is_built_in_cmd(vector<cmd_t> &cmds)
 {
     if (!cmds[0].name.compare("setenv"))
     {
@@ -126,8 +126,8 @@ static bool is_built_in_cmd(vector<cmd_t> &cmds, int client_sock)
 
         if (value)
         {
-            sock_write(client_sock, value, strlen(value));
-            sock_write(client_sock, "\n", 1);
+            sock_write(cur_sock_fd, value, strlen(value));
+            sock_write(cur_sock_fd, "\n", 1);
         }
 
         return true;
@@ -156,7 +156,7 @@ static bool is_built_in_cmd(vector<cmd_t> &cmds, int client_sock)
     else if (!cmds[0].name.compare("name"))
     {
         string new_name = cmds[0].argv[0];
-        
+
         usr_update_name(new_name);
         return true;
     }
@@ -182,8 +182,9 @@ void sig_handler(int signum)
         break;
     case SIGUSR1:
         msg_read_msg();
+        break;
     case SIGUSR2:
-        // usr_pipe_open();
+        usr_pipe_open();
         break;
     default:
         break;
@@ -220,10 +221,10 @@ static void wait_cur_proc()
 }
 
 // function using in shell
-vector<string> cmd_read(int client_sock)
+vector<string> cmd_read()
 {
     string cmdline = "";
-    sock_getline(client_sock, cmdline, MAX_LINE_SIZE);
+    sock_getline(cur_sock_fd, cmdline, MAX_LINE_SIZE);
     vector<string> tokens = tokenize(cmdline);
 
     // for broadcast the raw string
@@ -294,9 +295,9 @@ void cmd_parse(cmdline_t &cmdline, vector<string> line)
     return;
 }
 
-void cmd_exec(cmdline_t cmdline, int client_sock)
+void cmd_exec(cmdline_t cmdline)
 {
-    if (is_built_in_cmd(cmdline.cmds, client_sock))
+    if (is_built_in_cmd(cmdline.cmds))
     {
         return;
     }
@@ -313,6 +314,18 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
     if (pre_pipe.target_line != -1)
     {
         close(pre_pipe.pipe_fd[1]);
+    }
+
+    // output to/input from several pipes will not happened,
+    // so the read user_pipe must occur at first cmd of cmdline
+    // and the write user_pipe must occur at last cmd of cmdline.
+    int from_up = 0, to_up = 0;
+
+    // stdin from several pipe(num or user or ordinary) will not happened
+    cmd_t first_cmd = cmdline.cmds[0];
+    if (pre_pipe.target_line == -1 && IS_PIPE_USER_IN(first_cmd.symbol_type))
+    {
+        from_up = usr_pipe_from(first_cmd.from_uid, cmdline.raw);
     }
 
     enable_sh();
@@ -358,6 +371,10 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
         {
             file_fd = open(cmd->file_name.c_str(), O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
         }
+        else if (IS_PIPE_USER_OUT(cmd->symbol_type))
+        {
+            to_up = usr_pipe_to(cmd->to_uid, cmdline.raw);
+        }
 
         // ready to fork
         if ((pid = fork()) > 0)
@@ -387,23 +404,36 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
                 read_pipe = -1;
             }
 
+            // remove the from_user's user_pipe to the user
+            if (to_up > 0)
+            {
+                close(to_up);
+            }
+
             // redirect
             if (file_fd != -1)
             {
                 close(file_fd);
             }
+
+            from_up = to_up = 0;
         }
         else if (pid == 0)
         {
             // child process
 
             // input pipe
-            dup2(client_sock, STDIN_FILENO);
+            dup2(cur_sock_fd, STDIN_FILENO);
 
             // check first cmd has been pipe_numbered or not
             if (pre_pipe.target_line != -1 && cmd_idx == 0)
             {
                 dup2(pre_pipe.pipe_fd[0], STDIN_FILENO);
+            }
+            else if (from_up != 0)
+            {
+                // /dev/null or user_pipe
+                dup2(from_up, STDIN_FILENO);
             }
             else if (read_pipe != -1)
             {
@@ -411,8 +441,8 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
             }
 
             // output pipe
-            dup2(client_sock, STDOUT_FILENO);
-            dup2(client_sock, STDERR_FILENO);
+            dup2(cur_sock_fd, STDOUT_FILENO);
+            dup2(cur_sock_fd, STDERR_FILENO);
 
             if (IS_PIPE_ORDINARY(cmd->symbol_type))
             {
@@ -434,6 +464,19 @@ void cmd_exec(cmdline_t cmdline, int client_sock)
             {
                 dup2(file_fd, STDOUT_FILENO);
             }
+
+            if (to_up != 0)
+            {
+                // /dev/null or user_pipe
+                dup2(to_up, STDOUT_FILENO);
+            }
+
+            // Close pipe
+            for (int i = 3; i < 1024; ++i)
+            {
+                close(i);
+            }
+
 
             // processing argv
             int argv_size = cmd->argv.size() + 2;

@@ -26,8 +26,6 @@ int cur_sock_fd;
 void shell_run(int client_sock, int uid)
 {
     shell_init();
-    cur_uid = uid;
-    cur_sock_fd = client_sock;
 
     int line_idx = 0;
     while (true)
@@ -35,7 +33,7 @@ void shell_run(int client_sock, int uid)
         msg_prompt(client_sock);
 
         // tokens = { ls -al | cat |2 ls | cat !1 ls > text.txt}
-        vector<string> tokens = cmd_read(client_sock);
+        vector<string> tokens = cmd_read();
         if (!tokens.size())
         {
             continue;
@@ -48,6 +46,8 @@ void shell_run(int client_sock, int uid)
                 { ls, >, text.txt }
             }
         */
+        string raw_cmdline = tokens.back();
+        tokens.pop_back();
         vector<vector<string>> str_lines = cmd_split_line(tokens);
         vector<cmdline_t> cmdlines;
         for (auto str_line : str_lines)
@@ -55,7 +55,7 @@ void shell_run(int client_sock, int uid)
             cmdline_t cmdline;
 
             cmd_parse(cmdline, str_line);
-
+            cmdline.raw = raw_cmdline;
             cmdline.line_idx = line_idx++;
             cmdlines.push_back(cmdline);
         }
@@ -65,7 +65,7 @@ void shell_run(int client_sock, int uid)
         }
         for (auto cmdline : cmdlines)
         {
-            cmd_exec(cmdline, client_sock);
+            cmd_exec(cmdline);
         }
     }
 }

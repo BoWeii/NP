@@ -51,6 +51,10 @@ void msg_read_msg();
 void msg_write_msg(const char *content, int type, int arg);
 void msg_release();
 void msg_who();
+void msg_user_not_exist(int uid);
+void msg_up_exist(int to_uid);
+void msg_user_not_exist(int uid);
+void msg_up_not_exist(int from_uid);
 
 extern shm_msg_t shm_msg;
 
