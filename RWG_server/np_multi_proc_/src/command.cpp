@@ -320,12 +320,14 @@ void cmd_exec(cmdline_t cmdline)
     // so the read user_pipe must occur at first cmd of cmdline
     // and the write user_pipe must occur at last cmd of cmdline.
     int from_up = 0, to_up = 0;
+    int from_uid = 0;
 
     // stdin from several pipe(num or user or ordinary) will not happened
     cmd_t first_cmd = cmdline.cmds[0];
     if (pre_pipe.target_line == -1 && IS_PIPE_USER_IN(first_cmd.symbol_type))
     {
-        from_up = usr_pipe_from(first_cmd.from_uid, cmdline.raw);
+        from_uid=first_cmd.from_uid;
+        from_up = usr_pipe_from(from_uid, cmdline.raw);
     }
 
     enable_sh();
@@ -410,6 +412,11 @@ void cmd_exec(cmdline_t cmdline)
                 close(to_up);
             }
 
+            if (from_up > 0)
+            {
+                usr_pipe_release(from_uid);
+            }
+
             // redirect
             if (file_fd != -1)
             {
@@ -476,7 +483,6 @@ void cmd_exec(cmdline_t cmdline)
             {
                 close(i);
             }
-
 
             // processing argv
             int argv_size = cmd->argv.size() + 2;

@@ -16,7 +16,7 @@ MULTI_IC:=$(MULTI)_/include
 MULTI_SRC:=$(shell find np_multi_proc_/src/ -name '*.cpp')
 MULTI_OBJS:=$(MULTI_SRC:%.cpp=%.o) 
 
-all: $(MULTI)
+all:  $(SIMPLE) $(SINGLE) $(MULTI)
 
 $(SIMPLE):
 	$(CXX) -o $@ -I$(SIMPLE_IC) $(CFLAG) $(SIMPLE_SRC)
@@ -40,4 +40,6 @@ ta:
 
 
 clean:
-	$(RM) $(MULTI) $(MULTIOBJS)
+	$(RM) $(MULTI) $(MULTI_OBJS) \
+		$(SINGLE) $(SINGLE_OBJS)\
+		$(SIMPLE) $(SIMPLE_OBJS)

@@ -67,7 +67,6 @@ void msg_init()
     shm_msg.msg = (message_t *)shmat(shm_msg.shm_id, NULL, 0);
     shm_msg.msg->write_offset = shm_msg.read_offset = 0;
     shm_msg.msg->mem[0] = 0;
-    shm_msg.msg->mem[MSG_SIZE_MAX - 1] = MSG_CANT_EXCEED;
     shm_msg.sem_id = semget(IPC_PRIVATE, 2, IPC_CREAT | IPC_EXCL | 0600);
 }
 
@@ -290,7 +289,7 @@ void msg_read_msg()
         free(msg);
         return;
     }
-    
+
     msg_read_signal();
     return;
 }

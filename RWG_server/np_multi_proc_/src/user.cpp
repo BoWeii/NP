@@ -463,8 +463,9 @@ void usr_pipe_release(int from_uid)
     sprintf(fifo, "user_pipe/%d/%d", cur_uid, from_uid);
 
     unlink(fifo);
-
-    if (up_fds[from_uid]) {
+    
+    if (up_fds[from_uid])
+    {
         close(up_fds[from_uid]);
         up_fds[from_uid] = 0;
     }
