@@ -10,24 +10,30 @@ HTTP:=http_server
 HTTP_SRC:=$(shell find http_server_/src/ -name '*.cpp')
 HTTP_OBJS:=$(HTTP_SRC:%.cpp=%.o) 
 
+CONSOLE:=console.cgi
+CONSOLE_SRC:=$(shell find cgi_/src/ -name '*.cpp')
+CONSOLE_OBJS:=$(CONSOLE_SRC:%.cpp=%.o) 
 
 
-all: $(HTTP) 
+
+all: $(HTTP)  $(CONSOLE)
 
 $(HTTP):
 	$(CXX) $(HTTP_SRC) -o $@  $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
 
+$(CONSOLE):
+	$(CXX) $(CONSOLE_SRC) -o $@  $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
 
 test : clean all
 	./http_server 7001
 	
 ta: 
-	$(CXX) extra_files/commands/noop.cpp -o bin/noop
-	$(CXX) extra_files/commands/number.cpp -o bin/number
-	$(CXX) extra_files/commands/removetag.cpp -o bin/removetag
-	$(CXX) extra_files/commands/removetag0.cpp -o bin/removetag0
-	$(CXX) extra_files/commands/manyblessings.cpp -o bin/manyblessings
-
+	$(CXX) command/delayedremovetag.cpp -o bin/delayedremovetag
+	$(CXX) command/noop.cpp -o bin/noop
+	$(CXX) command/number.cpp -o bin/number
+	$(CXX) command/removetag0.cpp -o bin/removetag0
+	$(CXX) command/removetag.cpp -o bin/removetag
 
 clean:
-	$(RM) $(HTTP) $(HTTP_OBJS)
+	$(RM) $(HTTP) $(HTTP_OBJS) \
+		$(CONSOLE) $(CONSOLE_OBJS)

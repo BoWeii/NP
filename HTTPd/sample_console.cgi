@@ -61,12 +61,18 @@ print(
         <tr>
           <th scope="col">nplinux1.cs.nctu.edu.tw:1234</th>
           <th scope="col">nplinux2.cs.nctu.edu.tw:5678</th>
+           <th scope="col">nplinux1.cs.nctu.edu.tw:1234</th>
+          <th scope="col">nplinux2.cs.nctu.edu.tw:5678</th>
+           <th scope="col">nplinux1.cs.nctu.edu.tw:1234</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td><pre id="s0" class="mb-0"></pre></td>
           <td><pre id="s1" class="mb-0"></pre></td>
+          <td><pre id="s0" class="mb-0"></pre></td>
+          <td><pre id="s1" class="mb-0"></pre></td>
+          <td><pre id="s0" class="mb-0"></pre></td>
         </tr>
       </tbody>
     </table>
