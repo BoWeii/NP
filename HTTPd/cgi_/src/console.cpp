@@ -142,7 +142,7 @@ private:
         }
 
         output_command(str);
-        
+
         // the data write to np_single_golden
         auto self(shared_from_this());
         boost::asio::async_write(socket_, boost::asio::buffer(str.c_str(), str.length()),
@@ -191,13 +191,13 @@ private:
         boost::replace_all(str, "\r", "");
     }
 
-    tcp::resolver resolver_;
-    tcp::socket socket_;
     enum
     {
         max_length = 1024
     };
     char data_[max_length];
+    tcp::resolver resolver_;
+    tcp::socket socket_;
     connect_info info_;
     tcp::endpoint endpoint_;
     vector<string> testcase_;
