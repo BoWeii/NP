@@ -37,6 +37,7 @@ public:
           socket_(io_context)
     {
         info_ = info;
+        data_[max_length] = '\0';
 
         // read ./test_case/t1.txt
         string file_path = "./test_case/" + info_.testcase_name;
@@ -112,14 +113,14 @@ private:
 
                                         memset(data_, 0, max_length);
 
-                                        if (data.find("%") != string::npos)
-                                        {
-                                            do_write();
-                                        }
-                                        else
+                                        if (data.find("%") == string::npos)
                                         {
                                             // not read the end of line yet
                                             do_read();
+                                        }
+                                        else
+                                        {
+                                            do_write();
                                         }
                                     }
                                     else
@@ -158,7 +159,7 @@ private:
                                      }
                                  });
     }
-    
+
     void output_shell(string content)
     {
         html_escape(content);
@@ -195,7 +196,9 @@ private:
     {
         max_length = 1024
     };
-    char data_[max_length];
+
+    // one for null byte
+    char data_[max_length + 1];
     tcp::resolver resolver_;
     tcp::socket socket_;
     connect_info info_;
