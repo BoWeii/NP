@@ -16,7 +16,7 @@ CONSOLE_OBJS:=$(CONSOLE_SRC:%.cpp=%.o)
 
 
 
-all: $(HTTP)  $(CONSOLE)
+part1: $(HTTP)  $(CONSOLE)
 
 $(HTTP):
 	$(CXX) $(HTTP_SRC) -o $@  $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
