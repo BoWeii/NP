@@ -111,7 +111,7 @@ private:
                                         string data = string(data_);
                                         output_shell(data);
 
-                                        memset(data_, 0, max_length);
+                                        memset(data_, 0, max_length + 1);
 
                                         if (data.find("%") == string::npos)
                                         {
@@ -125,6 +125,7 @@ private:
                                     }
                                     else
                                     {
+                                        do_read();
                                         cerr << "[error] read failed (" << info_.server << "," << info_.host_name << "," << info_.port << "," << endpoint_ << ")" << endl;
                                     }
                                 });

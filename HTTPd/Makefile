@@ -24,7 +24,7 @@ $(HTTP):
 $(CONSOLE):
 	$(CXX) $(CONSOLE_SRC) -o $@  $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
 
-test : clean all
+test : clean part1
 	./http_server 7001
 	
 ta: 
