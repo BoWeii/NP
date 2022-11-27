@@ -17,6 +17,8 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <unordered_map>
 #include <stdlib.h>
+#include <sys/wait.h>
+#include <boost/asio/signal_set.hpp>
 
 using boost::asio::ip::tcp;
 using namespace std;
@@ -186,12 +188,30 @@ class server
 {
 public:
     server(boost::asio::io_context &io_context, short port)
-        : acceptor_(io_context, tcp::endpoint(tcp::v4(), port))
+        : acceptor_(io_context, tcp::endpoint(tcp::v4(), port)),
+          signal_(io_context, SIGCHLD)
     {
+        wait_for_signal();
         do_accept();
     }
 
 private:
+    void wait_for_signal()
+    {
+        signal_.async_wait(
+            [this](boost::system::error_code /*ec*/, int /*signo*/)
+            {
+                if (acceptor_.is_open())
+                {
+                    int status = 0;
+                    while (waitpid(-1, &status, WNOHANG) > 0)
+                    {
+                    }
+
+                    wait_for_signal();
+                }
+            });
+    }
     void do_accept()
     {
         acceptor_.async_accept(
@@ -207,6 +227,7 @@ private:
     }
 
     tcp::acceptor acceptor_;
+    boost::asio::signal_set signal_;
 };
 
 int main(int argc, char *argv[])
