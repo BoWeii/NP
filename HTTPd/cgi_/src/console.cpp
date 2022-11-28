@@ -108,6 +108,7 @@ private:
                                     if (!ec)
                                     {
                                         // the data read from np_single_golden
+                                        data_[max_length] = '\0';
                                         string data = string(data_);
                                         output_shell(data);
 
@@ -125,7 +126,6 @@ private:
                                     }
                                     else
                                     {
-                                        do_read();
                                         cerr << "[error] read failed (" << info_.server << "," << info_.host_name << "," << info_.port << "," << endpoint_ << ")" << endl;
                                     }
                                 });
