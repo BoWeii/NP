@@ -14,9 +14,11 @@ CONSOLE:=console.cgi
 CONSOLE_SRC:=$(shell find cgi_/src/ -name '*.cpp')
 CONSOLE_OBJS:=$(CONSOLE_SRC:%.cpp=%.o) 
 
-
+CGI_SERVER:=cgi_server.exe
 
 part1: $(HTTP)  $(CONSOLE)
+
+part2: $(CGI_SERVER)
 
 $(HTTP):
 	$(CXX) $(HTTP_SRC) -o $@  $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
@@ -24,7 +26,11 @@ $(HTTP):
 $(CONSOLE):
 	$(CXX) $(CONSOLE_SRC) -o $@  $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
 
-test : clean part1
+$(CGI_SERVER):
+	g++ cgi_server_/src/cgi_server.cpp cgi_server_/src/panel.cpp cgi_server_/src/console.cpp -o cgi_server.exe -lws2 32 -lwsock32 -std=c++14
+
+
+test : clean all
 	./http_server 7001
 	
 ta: 
@@ -36,4 +42,5 @@ ta:
 
 clean:
 	$(RM) $(HTTP) $(HTTP_OBJS) \
-		$(CONSOLE) $(CONSOLE_OBJS)
+		$(CONSOLE) $(CONSOLE_OBJS) \
+		$(CGI_SERVER)
