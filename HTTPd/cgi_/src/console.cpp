@@ -108,7 +108,9 @@ private:
                                     if (!ec)
                                     {
                                         // the data read from np_single_golden
-                                        data_[max_length] = '\0';
+
+                                        //prevent printing the noise data which is out of length range
+                                        data_[length] = '\0';
                                         string data = string(data_);
                                         output_shell(data);
 
