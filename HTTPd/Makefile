@@ -27,7 +27,7 @@ $(CONSOLE):
 	$(CXX) $(CONSOLE_SRC) -o $@  $(CXX_INCLUDE_PARAMS) $(CXX_LIB_PARAMS) $(CXXFLAGS)
 
 $(CGI_SERVER):
-	g++ cgi_server_/src/cgi_server.cpp cgi_server_/src/panel.cpp cgi_server_/src/console.cpp -o cgi_server.exe -lws2 32 -lwsock32 -std=c++14
+	g++ cgi_server_/src/cgi_server.cpp cgi_server_/src/panel.cpp cgi_server_/src/console.cpp -o cgi_server.exe -lws2_32 -lwsock32 -std=c++14
 
 
 test : clean all
