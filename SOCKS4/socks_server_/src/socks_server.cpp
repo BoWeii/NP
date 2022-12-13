@@ -27,9 +27,6 @@
 using boost::asio::ip::tcp;
 using namespace std;
 
-static unordered_map<string, string> const http_method_table = {
-    {"GET", "GET"}};
-
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 typedef unsigned int DWORD;
@@ -43,6 +40,16 @@ struct SOCKS4_REPLY
     DWORD dst_ip;
 };
 
+DWORD ip_to_dword(string ip)
+{
+    struct sockaddr_in sa;
+    inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
+    return sa.sin_addr.s_addr;
+}
+WORD int_to_port(int port)
+{
+    return ((port & 0xff00) >> 8) | ((port & 0xff) << 8);
+}
 class session
     : public std::enable_shared_from_this<session>
 {
@@ -204,9 +211,11 @@ private:
                 }
 
                 int dst_ip[4];
+                cerr<<"server_endpoint_.address().to_string()="<<server_endpoint_.address().to_string()<<endl;
                 boost::split(ips, server_endpoint_.address().to_string(), boost::is_any_of("."), boost::token_compress_on);
                 for (int i = 0; i < 4; ++i)
                 {
+                    cerr<<"ips["<<i<<"]="<<ips[i]<<endl;
                     dst_ip[i] = boost::lexical_cast<int>(ips[i]);
                 }
 
@@ -273,11 +282,20 @@ private:
                                          {
                                              if (cd_ == 1)
                                              {
+                                                 // Start relaying traffic on both directions
                                                  do_client_read();
                                                  do_server_read();
                                              }
                                              else if (cd_ == 2)
                                              {
+                                                 reply_cnt_++;
+
+                                                 if (reply_cnt_ == 2)
+                                                 {
+                                                     // Start relaying traffic on both directions
+                                                     do_client_read();
+                                                     do_server_read();
+                                                 }
                                              }
                                          }
                                      }
@@ -292,10 +310,12 @@ private:
             {
                 if (!ec)
                 {
+                    cerr<<"[do_connect v]\n";
                     do_reply(1, 0, 0);
                 }
                 else
                 {
+                    cerr<<"[do_connect x]\n";
                     do_reply(0, 0, 0);
                 }
             });
@@ -303,7 +323,44 @@ private:
     void do_bind()
     {
         auto self(shared_from_this());
+        int port = 9487;
+        reply_cnt_ = 0;
 
+        DWORD client_ip = ip_to_dword(client_socket_.local_endpoint().address().to_string());
+
+        while (true)
+        {
+            try
+            {
+                // Bind and listen a port
+                acceptor_ptr_ = new tcp::acceptor(io_context_, tcp::endpoint(tcp::v4(), port));
+                break;
+            }
+            catch (std::exception &e)
+            {
+                port++;
+            }
+        }
+
+        // Send SOCKS4 REPLY to SOCKS client to tell which port to connect
+        do_reply(1, int_to_port(port), client_ip);
+
+        acceptor_ptr_->async_accept(
+            [this, self, port, client_ip](boost::system::error_code ec, tcp::socket socket)
+            {
+                if (!ec)
+                {
+                    if (server_endpoint_.address().to_string() != socket.remote_endpoint().address().to_string())
+                    {
+                        return;
+                    }
+
+                    server_socket_ = tcp::socket(std::move(socket));
+
+                    // Accept connection from destination and send another SOCKS4 REPLY to SOCKS client
+                    do_reply(1, int_to_port(port), client_ip);
+                }
+            });
     }
     void do_client_read()
     {
@@ -370,16 +427,14 @@ private:
                                         for (auto it = endpoints.cbegin(); it != endpoints.cend(); it++)
                                         {
                                             server_endpoint_ = *it;
-                                            cerr<<"[*****************] get one\n";
                                             break;
-                                            
                                         }
 
                                         int status = check_firewall();
                                         if (status == -1)
                                         {
                                             // rejected
-                                            cerr << "[do_resolve x] status=-1\n";
+                                            cerr<<"Ready to reject\n";
                                             do_reply(0, 0, 0);
                                             return;
                                         }
@@ -387,19 +442,20 @@ private:
                                         if (cd_ == 1)
                                         {
                                             // CONNECT
+                                            cerr<<"Ready to CONNECT\n";
                                             do_connect();
                                             return;
                                         }
                                         else if (cd_ == 2)
                                         {
                                             // BIND
+                                            cerr<<"Ready to do_bind\n";
                                             do_bind();
                                         }
-                                        else
-                                        {
-                                            // TODO
-                                            do_reply(1, 0, 0);
-                                        }
+                                    }
+                                    else
+                                    {
+                                        do_reply(0, 0, 0);
                                     }
                                 });
     }
@@ -417,6 +473,8 @@ private:
     tcp::socket server_socket_;
     tcp::resolver resolver_;
     tcp::endpoint server_endpoint_;
+    int reply_cnt_;
+    tcp::acceptor *acceptor_ptr_;
 };
 
 class server
