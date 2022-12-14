@@ -15,7 +15,7 @@ CONSOLE_SRC:=$(shell find cgi_/src/ -name '*.cpp')
 CONSOLE_OBJS:=$(CONSOLE_SRC:%.cpp=%.o) 
 
 
-all: $(SOCKS) 
+all: $(SOCKS) $(HW4)
 
 
 $(SOCKS):
