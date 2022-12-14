@@ -27,6 +27,11 @@
 using boost::asio::ip::tcp;
 using namespace std;
 
+#define REPLY_LENGTH 8
+#define REQEUST_LENGTH 9
+#define REQUEST_GRANTED 90
+#define REQUEST_REJECTED 91
+
 typedef unsigned char BYTE;
 typedef unsigned short WORD;
 typedef unsigned int DWORD;
@@ -40,13 +45,13 @@ struct SOCKS4_REPLY
     DWORD dst_ip;
 };
 
-DWORD ip_to_dword(string ip)
+static DWORD ip_to_dword(string ip)
 {
     struct sockaddr_in sa;
     inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
     return sa.sin_addr.s_addr;
 }
-WORD int_to_port(int port)
+static WORD int_to_port(int port)
 {
     return ((port & 0xff00) >> 8) | ((port & 0xff) << 8);
 }
@@ -76,7 +81,7 @@ private:
                                        {
                                            if (!ec)
                                            {
-                                               if (length < 9)
+                                               if (length < REQEUST_LENGTH)
                                                {
                                                    cerr << "[do_parse_request X] the length is not less than 9\n";
                                                }
@@ -211,11 +216,9 @@ private:
                 }
 
                 int dst_ip[4];
-                cerr<<"server_endpoint_.address().to_string()="<<server_endpoint_.address().to_string()<<endl;
                 boost::split(ips, server_endpoint_.address().to_string(), boost::is_any_of("."), boost::token_compress_on);
                 for (int i = 0; i < 4; ++i)
                 {
-                    cerr<<"ips["<<i<<"]="<<ips[i]<<endl;
                     dst_ip[i] = boost::lexical_cast<int>(ips[i]);
                 }
 
@@ -248,7 +251,7 @@ private:
         SOCKS4_REPLY reply;
 
         reply.vn = 0;
-        reply.cd = status ? 90 : 91;
+        reply.cd = status ? REQUEST_GRANTED : REQUEST_REJECTED;
         reply.dst_ip = dst_IP;
         reply.dst_port = dst_port;
 
@@ -292,7 +295,7 @@ private:
 
                                                  if (reply_cnt_ == 2)
                                                  {
-                                                     // Start relaying traffic on both directions
+                                                     cout<<"[bind] Start relaying traffic on both directions\n";
                                                      do_client_read();
                                                      do_server_read();
                                                  }
@@ -310,12 +313,10 @@ private:
             {
                 if (!ec)
                 {
-                    cerr<<"[do_connect v]\n";
                     do_reply(1, 0, 0);
                 }
                 else
                 {
-                    cerr<<"[do_connect x]\n";
                     do_reply(0, 0, 0);
                 }
             });
@@ -434,7 +435,6 @@ private:
                                         if (status == -1)
                                         {
                                             // rejected
-                                            cerr<<"Ready to reject\n";
                                             do_reply(0, 0, 0);
                                             return;
                                         }
@@ -442,14 +442,12 @@ private:
                                         if (cd_ == 1)
                                         {
                                             // CONNECT
-                                            cerr<<"Ready to CONNECT\n";
                                             do_connect();
                                             return;
                                         }
                                         else if (cd_ == 2)
                                         {
                                             // BIND
-                                            cerr<<"Ready to do_bind\n";
                                             do_bind();
                                         }
                                     }
