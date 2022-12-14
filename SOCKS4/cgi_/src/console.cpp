@@ -14,6 +14,26 @@
 
 using boost::asio::ip::tcp;
 using namespace std;
+#define REPLY_LENGTH 8
+#define REQEUST_LENGTH 9
+#define REQUEST_GRANTED 90
+#define REQUEST_REJECTED 91
+
+typedef unsigned char BYTE;
+typedef unsigned short WORD;
+typedef unsigned int DWORD;
+
+static DWORD ip_to_dword(string ip)
+{
+    struct sockaddr_in sa;
+    inet_pton(AF_INET, ip.c_str(), &(sa.sin_addr));
+    return sa.sin_addr.s_addr;
+}
+
+static WORD int_to_port(int port)
+{
+    return ((port & 0xff00) >> 8) | ((port & 0xff) << 8);
+}
 
 struct connect_info
 {
@@ -28,15 +48,70 @@ struct connect_info
     string testcase_name;
 };
 
+struct socks_info
+{
+    socks_info()
+    {
+        enable = false;
+    }
+
+    bool enable;
+    string host_name;
+    string port;
+};
+
+struct socks4_request
+{
+    socks4_request()
+    {
+    }
+
+    socks4_request(tcp::endpoint endpoint)
+    {
+        vn = 4;
+        cd = 1; // CONNECT
+        dst_port = int_to_port(endpoint.port());
+        dst_IP = ip_to_dword(endpoint.address().to_string());
+        null_byte = 0;
+    }
+
+    BYTE vn;
+    BYTE cd;
+    WORD dst_port;
+    DWORD dst_IP;
+    BYTE null_byte;
+};
+
+struct socks4_reply
+{
+    socks4_reply()
+    {
+    }
+
+    socks4_reply(char *data)
+    {
+        vn = data[0];
+        cd = data[1];
+        dst_port = int_to_port(*((WORD *)&data[2]));
+        dst_ip = *((DWORD *)&data[4]);
+    }
+
+    BYTE vn;
+    BYTE cd;
+    WORD dst_port;
+    DWORD dst_ip;
+};
+
 class client
     : public std::enable_shared_from_this<client>
 {
 public:
-    client(boost::asio::io_context &io_context, connect_info info)
+    client(boost::asio::io_context &io_context, connect_info info, socks_info sinfo)
         : resolver_(boost::asio::make_strand(io_context)),
           socket_(io_context)
     {
         info_ = info;
+        socks_info_ = sinfo;
         data_[max_length] = '\0';
 
         // read ./test_case/t1.txt
@@ -75,13 +150,95 @@ private:
                         endpoint_ = *it;
                         break;
                     }
-                    do_connect();
+                    do_resolve_socks();
                 }
                 else
                 {
                     cerr << "[error] resolve failed (" << info_.server << "," << info_.host_name << "," << info_.port << "," << endpoint_ << ")" << endl;
                 }
             });
+    }
+    void do_resolve_socks()
+    {
+        auto self(shared_from_this());
+        if (socks_info_.enable)
+        {
+            resolver_.async_resolve(string(socks_info_.host_name),
+                                    string(socks_info_.port),
+                                    [this, self](boost::system::error_code ec, tcp::resolver::results_type endpoints)
+                                    {
+                                        if (!ec)
+                                        {
+                                            for (auto it = endpoints.cbegin(); it != endpoints.cend(); it++)
+                                            {
+                                                socks_endpoint_ = *it;
+                                                break;
+                                            }
+                                            do_connect_socks();
+                                        }
+                                        else
+                                        {
+                                            // normal connect without sock
+                                            do_connect();
+                                        }
+                                    });
+        }
+    }
+    void do_connect_socks()
+    {
+        auto self(shared_from_this());
+        socket_.async_connect(socks_endpoint_,
+                              [this, self](boost::system::error_code ec)
+                              {
+                                  if (!ec)
+                                  {
+
+                                      do_send_socks4_request();
+                                  }
+                                  else
+                                  {
+                                      // normal connect without sock
+                                      do_connect();
+                                  }
+                              });
+    }
+    void do_send_socks4_request()
+    {
+        auto self(shared_from_this());
+        struct socks4_request request(endpoint_);
+
+        // 9 = 1 + 1 + 2 + 4 + 1(NULL)
+        boost::asio::async_write(socket_, boost::asio::buffer((char *)&request.vn, REQEUST_LENGTH),
+                                 [this, self](boost::system::error_code ec, std::size_t /**length*/)
+                                 {
+                                     if (!ec)
+                                     {
+                                         do_read_socks4_reply();
+                                     }
+                                 });
+    }
+    void do_read_socks4_reply()
+    {
+        auto self(shared_from_this());
+        socket_.async_read_some(boost::asio::buffer(data_, REPLY_LENGTH),
+                                [this, self](boost::system::error_code ec, size_t length)
+                                {
+                                    if (!ec)
+                                    {
+                                        if (length != REPLY_LENGTH)
+                                        {
+                                            return;
+                                        }
+                                        struct socks4_reply reply = (data_);
+                                        if (reply.vn != 0 || reply.cd != REQUEST_GRANTED)
+                                        {
+                                            return;
+                                        }
+
+                                        // SOCKS4 connection established
+                                        do_read();
+                                    }
+                                });
     }
     void do_connect()
     {
@@ -109,7 +266,7 @@ private:
                                     {
                                         // the data read from np_single_golden
 
-                                        //prevent printing the noise data which is out of length range
+                                        // prevent printing the noise data which is out of length range
                                         data_[length] = '\0';
                                         string data = string(data_);
                                         output_shell(data);
@@ -207,6 +364,8 @@ private:
     connect_info info_;
     tcp::endpoint endpoint_;
     vector<string> testcase_;
+    socks_info socks_info_;
+    tcp::endpoint socks_endpoint_;
 };
 
 int main()
@@ -263,6 +422,7 @@ int main()
         //              h1=nplinux2.cs.nctu.edu.tw&p1=5678&f1=t2.txt&
         //              h2=&p2=&f2=&h3=&p3=&f3=&h4=&p4=&f4="
         vector<string> params;
+        socks_info socks_info_;
         vector<connect_info> infos(5);
         boost::split(params, query, boost::is_any_of("&"), boost::token_compress_on);
 
@@ -277,16 +437,42 @@ int main()
                 string value = param.substr(split_idx + 1);
 
                 int machine_idx = -1;
+                bool use_socks = false;
+
                 if (key.length() == 2)
                 {
-                    int n = key[1] - '0';
-                    if (0 <= n && n < 5)
+                    if (key[0] == 's')
                     {
-                        machine_idx = n;
+                        // For SOCKS server
+                        use_socks = true;
+                        socks_info_.enable = true;
+                    }
+                    else
+                    {
+                        int n = key[1] - '0';
+                        if (0 <= n && n < 5)
+                        {
+                            machine_idx = n;
+                        }
                     }
                 }
 
-                if (machine_idx != -1)
+                if (use_socks)
+                {
+                    switch (key[1])
+                    {
+                    case 'h':
+                        socks_info_.host_name = value;
+                        break;
+                    case 'p':
+                        socks_info_.port = value;
+                        break;
+                    default:
+                        break;
+                    }
+                }
+
+                else if (machine_idx != -1)
                 {
                     switch (key[0])
                     {
@@ -336,7 +522,7 @@ int main()
         {
             if (info.host_name != "")
             {
-                make_shared<client>(io_context, info)->start();
+                make_shared<client>(io_context, info, socks_info_)->start();
             }
         }
         io_context.run();
