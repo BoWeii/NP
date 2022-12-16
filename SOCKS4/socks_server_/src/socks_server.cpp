@@ -295,7 +295,6 @@ private:
 
                                                  if (reply_cnt_ == 2)
                                                  {
-                                                     cout<<"[bind] Start relaying traffic on both directions\n";
                                                      do_client_read();
                                                      do_server_read();
                                                  }
